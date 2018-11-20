@@ -1,13 +1,11 @@
-package main
+package fswatch
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/golang/glog"
 )
 
 //
@@ -17,26 +15,24 @@ type FsNotifyBase struct {
 }
 
 func (f *FsNotifyBase) Create(path string) error {
-	glog.V(4).Infof("Create %v", path)
 	return nil
 }
 func (f *FsNotifyBase) Write(path string) error {
-
-	glog.V(4).Infof("Write %v", path)
 	return nil
 }
 func (f *FsNotifyBase) Remove(path string) error {
-	glog.V(4).Infof("Remove %v", path)
 	return nil
 }
 func (f *FsNotifyBase) Rename(path string) error {
-	glog.V(4).Infof("Rename %v", path)
 	return nil
 
 }
 func (f *FsNotifyBase) Chmod(path string) error {
-	glog.V(4).Infof("Chmod %v", path)
 	return nil
+
+}
+func (f *FsNotifyBase) Error(path string, err error) {
+	return
 
 }
 
@@ -46,24 +42,25 @@ type Ifsnotify interface {
 	Remove(path string) error
 	Rename(path string) error
 	Chmod(path string) error
+	Error(path string, err error)
 }
 
-func WatcherRecursive(ctx context.Context, path string, notify Ifsnotify) {
+func WatcherRecursive(ctx context.Context, path string, notify Ifsnotify) (err error) {
 	// creates a new file watcher
 	watcher, _ = fsnotify.NewWatcher()
 	defer watcher.Close()
 	// starting at the root of the project, walk each file/directory searching for
 	// directories
 	if err := filepath.Walk(path, watchDir); err != nil {
-		glog.Errorf("Walk Path:%v failed, %v", path, err.Error())
+		// glog.Errorf("Walk Path:%v failed, %v", path, err.Error())
+		return err
 	}
-
 	for {
 		select {
 		// watch for events
 		case event := <-watcher.Events:
-			fmt.Printf("EVENT! %#v\n", event.String())
-			glog.V(4).Infof("EVENT! %#v\n", event.String())
+			//glog.V(4).Infof("EVENT! %#v\n", event.String())
+			//fmt.Printf("EVENT! %#v\n", event.String())
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				fi, err := os.Stat(event.Name)
 				watchDir(event.Name, fi, err)
@@ -76,7 +73,7 @@ func WatcherRecursive(ctx context.Context, path string, notify Ifsnotify) {
 
 			if event.Op&fsnotify.Remove == fsnotify.Remove {
 				notify.Remove(event.Name)
-				fmt.Printf("watch remove path:%v\n", event.Name)
+				// fmt.Printf("watch remove path:%v\n", event.Name)
 				watcher.Remove(event.Name)
 			}
 
@@ -90,9 +87,9 @@ func WatcherRecursive(ctx context.Context, path string, notify Ifsnotify) {
 
 			// watch for errors
 		case err := <-watcher.Errors:
-			glog.Errorf("get a watcher Error Path:%v failed, %v", path, err.Error())
+			notify.Error(path, err)
 		case <-ctx.Done():
-			return
+			return nil
 		}
 	}
 
@@ -103,7 +100,7 @@ func watchDir(path string, fi os.FileInfo, err error) error {
 	// since fsnotify can watch all the files in a directory, watchers only need
 	// to be added to each nested directory
 	if fi.Mode().IsDir() {
-		fmt.Printf("watch add path:%v\n", path)
+		//fmt.Printf("watch add path:%v\n", path)
 		return watcher.Add(path)
 
 	}
