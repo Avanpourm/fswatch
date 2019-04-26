@@ -2,6 +2,7 @@ package fswatch
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -63,7 +64,10 @@ func WatcherRecursive(ctx context.Context, path string, notify Ifsnotify) (err e
 			//fmt.Printf("EVENT! %#v\n", event.String())
 			if event.Op&fsnotify.Create == fsnotify.Create {
 				fi, err := os.Stat(event.Name)
-				watchDir(event.Name, fi, err)
+				err = watchDir(event.Name, fi, err)
+				if err != nil {
+					notify.Error(event.Name, err)
+				}
 				notify.Create(event.Name)
 			}
 
@@ -72,9 +76,8 @@ func WatcherRecursive(ctx context.Context, path string, notify Ifsnotify) (err e
 			}
 
 			if event.Op&fsnotify.Remove == fsnotify.Remove {
-				notify.Remove(event.Name)
-				// fmt.Printf("watch remove path:%v\n", event.Name)
 				watcher.Remove(event.Name)
+				notify.Remove(event.Name)
 			}
 
 			if event.Op&fsnotify.Rename == fsnotify.Rename {
@@ -99,6 +102,12 @@ func WatcherRecursive(ctx context.Context, path string, notify Ifsnotify) (err e
 func watchDir(path string, fi os.FileInfo, err error) error {
 	// since fsnotify can watch all the files in a directory, watchers only need
 	// to be added to each nested directory
+	if err != nil {
+		return err
+	}
+	if fi == nil {
+		return fmt.Errorf("path:%v, FileInfo is nil", path)
+	}
 	if fi.Mode().IsDir() {
 		//fmt.Printf("watch add path:%v\n", path)
 		return watcher.Add(path)
